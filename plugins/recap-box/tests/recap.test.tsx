@@ -61,12 +61,15 @@ const calls = async ($: Engine, clock: MockClock) => {
   await clock.advance(2_000)
 }
 
-// GitHub's answer to whether main moved past the copy running: by default, a folder it cannot compare.
+// The manifest on the library's main, which names the newest version: by default, a page GitHub cannot find.
 type Fetched = { value: HttpResponse } | { deny: string }
-const NOT_FOUND: Fetched = { value: { status: 404, ok: false, headers: {}, text: '{"message":"Not Found"}' } }
-const compared = (aheadBy: number): Fetched => ({
-  value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ status: aheadBy ? 'ahead' : 'identical', ahead_by: aheadBy }) },
+const NOT_FOUND: Fetched = { value: { status: 404, ok: false, headers: {}, text: '404: Not Found' } }
+const released = (version: string): Fetched => ({
+  value: { status: 200, ok: true, headers: {}, text: JSON.stringify({ name: 'recap-box', version }) },
 })
+const MAIN = 'https://raw.githubusercontent.com/duysqubix/claude-mods/main/plugins/recap-box/.claude-plugin/plugin.json'
+// The version the copy running names in its own manifest.
+const RUNNING = '1.2.3'
 const UPDATE = 'Update available: /recap-box upgrade'
 const HOUR = 3_600_000
 
@@ -78,6 +81,8 @@ type Options = {
   end?: () => Promise<void>
   isPlaced?: () => boolean
   github?: (url: string) => Fetched
+  // null: the manifest cannot be read.
+  running?: string | null
 }
 
 // Answers with what reached it; the prompt stand-in masks a key and drops a marked prompt, as a settings hook might.
@@ -85,11 +90,17 @@ const engine = (
   on: On,
   messages: SessionMessage[] | (() => Promise<SessionMessage[]>),
   model: (e: ModelCompleteInput) => Answer | Promise<Answer>,
-  { agents = [], store = new Map(), end, isPlaced = () => true, github = () => NOT_FOUND }: Options = {},
+  { agents = [], store = new Map(), end, isPlaced = () => true, github = () => NOT_FOUND, running = RUNNING }: Options = {},
 ) => {
   const entered: string[] = []
   on('command.register', () => ({ value: { command: 'recap-box' } }))
   on('http.fetch', (_, e) => github(e.url))
+  // The mod's own manifest, the one file it reads.
+  on('fs.read', (_, e) => {
+    if (running === null || !e.path.endsWith('/.claude-plugin/plugin.json')) throw new Error(`ENOENT: ${e.path}`)
+
+    return { value: JSON.stringify({ name: 'recap-box', version: running }) }
+  })
   on('store.get', (_, e) => ({ value: store.get(e.key) }))
   on('store.set', (_, e) => ({ value: void store.set(e.key, e.value) }))
   // The box stays open until it is closed, and an open brings it back.
@@ -690,7 +701,7 @@ test('/recap-box shows a box that waits undrawn rather than hiding it', async ($
 test('the box says at its top while main holds a newer version, asking GitHub at the start and every hour', async ($, on) => {
   const clock = mock.clock(on)
   const urls: string[] = []
-  const answers = [compared(0), compared(3), compared(0)]
+  const answers = [released(RUNNING), released('1.3.0'), released(RUNNING)]
   engine(on, [], () => say('Now: Working.'), {
     github: url => {
       urls.push(url)
@@ -709,9 +720,8 @@ test('the box says at its top while main holds a newer version, asking GitHub at
   await clock.advance(HOUR)
   expect(await texts()).toEqual([UPDATE, 'Waiting for activity.'])
   expect((await ui.find({ type: 'Text', text: UPDATE }))?.props.color).toBe('suggestion')
-  // Asked of the commit the copy's folder is named for, against main.
-  expect(urls.length).toBe(2)
-  for (const url of urls) expect(url).toMatch(/^https:\/\/api\.github\.com\/repos\/duysqubix\/recap-box\/compare\/[^/]+\.\.\.main$/)
+  // Read from the manifest on the library's main.
+  expect(urls).toEqual([MAIN, MAIN])
   // Once the copy running is main's own, the line goes.
   await clock.advance(HOUR)
   expect(await texts()).toEqual(['Waiting for activity.'])
@@ -725,7 +735,7 @@ test('GitHub is asked at once only where someone watches: a person at the prompt
     github: url => {
       urls.push(url)
 
-      return compared(3)
+      return released('9.0.0')
     },
   })
 
@@ -741,14 +751,20 @@ test('GitHub is asked at once only where someone watches: a person at the prompt
   await ui.unmount()
 })
 
-test('a copy GitHub cannot compare, or an answer that cannot be read, shows no update', async ($, on) => {
+test('main at the same version or an older one, or an answer that cannot be read, shows no update', async ($, on) => {
   const clock = mock.clock(on)
-  let answer = compared(3)
+  // Ten comes after two: versions compare by number, not as text.
+  const newer = released('1.10.0')
+  let answer = newer
   engine(on, [], () => say('Now: Working.'), { github: () => answer })
   const fails: Fetched[] = [
-    // A folder that names no commit (a clone), a request over GitHub's limit, a page that is not GitHub's, a refusal.
+    // The same version, an older one (a clone ahead of main), a version of another shape, a page GitHub cannot find,
+    // a refused request, a page that is not GitHub's, a refusal.
+    released(RUNNING),
+    released('1.2.2'),
+    released('2.0'),
     NOT_FOUND,
-    { value: { status: 403, ok: false, headers: {}, text: '{"ahead_by":3}' } },
+    { value: { status: 403, ok: false, headers: {}, text: '{"version":"9.0.0"}' } },
     { value: { status: 200, ok: true, headers: {}, text: '<html>Sign in to the network</html>' } },
     { deny: 'web fetch blocked' },
   ]
@@ -757,7 +773,7 @@ test('a copy GitHub cannot compare, or an answer that cannot be read, shows no u
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const texts = async () => (await ui.findAll({ type: 'Text' })).map(t => t.text)
   for (const fail of fails) {
-    answer = compared(3)
+    answer = newer
     await clock.advance(HOUR)
     expect(await texts()).toEqual([UPDATE, 'Waiting for activity.'])
     answer = fail
@@ -766,6 +782,20 @@ test('a copy GitHub cannot compare, or an answer that cannot be read, shows no u
   }
   await ui.unmount()
 })
+
+// A copy whose own version can't be compared never says main is newer.
+const noUpdateFor = (running: string | null) => async ($: Engine, on: On) => {
+  const clock = mock.clock(on)
+  engine(on, [], () => say('Now: Working.'), { github: () => released('9.0.0'), running })
+
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  await clock.advance(1_000)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect((await ui.findAll({ type: 'Text' })).map(t => t.text)).toEqual(['Waiting for activity.'])
+  await ui.unmount()
+}
+test('a copy whose own version is of another shape shows no update', noUpdateFor('dev'))
+test('a copy whose own manifest cannot be read shows no update', noUpdateFor(null))
 
 test('/recap-box upgrade updates the marketplace, then the mod, then reloads the plugins', async ($, on) => {
   const clock = mock.clock(on)
@@ -786,7 +816,7 @@ test('/recap-box upgrade updates the marketplace, then the mod, then reloads the
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   const r = await $.command.run({ command: 'recap-box', args: 'upgrade', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })
   expect(r.text).toBe('Recap box is at its newest version; reloading the plugins.')
-  expect(ran).toEqual(['claude plugin marketplace update recap-box', 'claude plugin update recap-box@recap-box'])
+  expect(ran).toEqual(['claude plugin marketplace update claude-mods', 'claude plugin update recap-box@claude-mods'])
   // The reload runs once the command is done.
   expect(reloads).toBe(0)
   await clock.advance(0)
@@ -800,7 +830,7 @@ test('/recap-box upgrade that fails or cannot start says how to update by hand, 
   const result = (exitCode: number, stderr: string) => ({
     value: { exitCode, stdout: '', stderr, isStdoutTruncated: false, isStderrTruncated: false },
   })
-  let answer: (argv: string) => ReturnType<typeof result> | { deny: string } = () => result(1, 'Marketplace "recap-box" not found\n')
+  let answer: (argv: string) => ReturnType<typeof result> | { deny: string } = () => result(1, 'Marketplace "claude-mods" not found\n')
   on('process.run', (_, e) => {
     ran.push(e.argv.join(' '))
 
@@ -814,12 +844,12 @@ test('/recap-box upgrade that fails or cannot start says how to update by hand, 
   })
   const run = async () =>
     (await $.command.run({ command: 'recap-box', args: 'upgrade', origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 80 } })).text
-  const BY_HAND = 'From a shell: claude plugin marketplace update recap-box && claude plugin update recap-box@recap-box, then /reload-plugins.'
+  const BY_HAND = 'From a shell: claude plugin marketplace update claude-mods && claude plugin update recap-box@claude-mods, then /reload-plugins.'
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
   // The marketplace fails: the mod is not touched.
-  expect(await run()).toBe(`Recap box was not updated: Marketplace "recap-box" not found. ${BY_HAND}`)
-  expect(ran).toEqual(['claude plugin marketplace update recap-box'])
+  expect(await run()).toBe(`Recap box was not updated: Marketplace "claude-mods" not found. ${BY_HAND}`)
+  expect(ran).toEqual(['claude plugin marketplace update claude-mods'])
   // The mod's own update fails.
   answer = argv => (argv.includes('marketplace') ? result(0, '') : result(1, 'Plugin "recap-box" is not installed'))
   expect(await run()).toBe(`Recap box was not updated: Plugin "recap-box" is not installed. ${BY_HAND}`)
@@ -1344,7 +1374,7 @@ test('a title of two or three words names the chat, centered in an outlined box 
 
       return say(replies.shift() ?? '')
     },
-    { github: () => compared(1) },
+    { github: () => released('9.0.0') },
   )
 
   await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })

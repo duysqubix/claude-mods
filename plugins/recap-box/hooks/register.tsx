@@ -13,8 +13,10 @@ const GAP_MS = 10_000
 const DELAYS = 5
 // A check that still reads the transcript a /resume left tries again this many times.
 const TRIES = 5
-// GitHub is asked this often whether main moved past the copy running, so a session left open hears of an update.
+// The library's main is read this often for a newer version, so a session left open hears of an update.
 const CHECK_MS = 3_600_000
+// The newest version: the manifest on the library's main.
+const MAIN = 'https://raw.githubusercontent.com/duysqubix/claude-mods/main/plugins/recap-box/.claude-plugin/plugin.json'
 // Whether the box lists the recaps before the one on show, read from the store at each start.
 // Not in `$.state`: a /clear goes on under another session, whose values start over.
 let isHistoryShown = false
@@ -235,17 +237,30 @@ function top($: EngineInterface) {
   $.ui.scroll({ in: PANE, to: 'start' }).catch(() => undefined)
 }
 
-// An installed copy runs from a folder named for its commit, so GitHub can say whether main moved past it. A folder of
-// any other name (a clone given to --plugin-dir) is no commit there and, like a request that fails, shows nothing.
+// The copy running names its version in its own manifest, and main names the newest. Only a copy older than main shows
+// the line: a clone at main's version or ahead of it shows nothing, and so does a read or a request that fails.
 async function check($: EngineInterface) {
-  const base = $.plugin.root.split(/[\\/]/).pop()
-  const is = await $.http
-    .fetch(`https://api.github.com/repos/duysqubix/recap-box/compare/${base}...main`, { headers: { 'User-Agent': 'recap-box' } })
-    .then(r => r.ok && JSON.parse(r.text).ahead_by > 0)
+  const version = (json: string) => String(JSON.parse(json).version)
+  const is = await Promise.all([
+    $.fs.read(`${$.plugin.root}/.claude-plugin/plugin.json`).then(version),
+    $.http.fetch(MAIN, { headers: { 'User-Agent': 'recap-box' } }).then(r => (r.ok ? version(r.text) : '')),
+  ])
+    .then(([mine, newest]) => isOlder(mine, newest))
     .catch(() => false)
   if (is === isBehind) return
   isBehind = is
   $.ui.invalidate('ui.render')
+}
+
+// Whether version `a` comes before `b`, both major.minor.patch; any other shape is never older.
+function isOlder(a: string, b: string) {
+  const parts = (v: string) => (/^\d+\.\d+\.\d+$/.test(v) ? v.split('.').map(Number) : null)
+  const x = parts(a)
+  const y = parts(b)
+  if (!x || !y) return false
+  const i = x.findIndex((n, k) => n !== y[k])
+
+  return i >= 0 && (x[i] ?? 0) < (y[i] ?? 0)
 }
 
 // Puts a recap on show and adds it to the history, under the stage it was written in.
@@ -434,8 +449,8 @@ export const register: Register = on => {
     if (/^upgrade$/i.test(args)) {
       // The steps a shell takes, by the claude on the PATH (an app may have none): one that fails says how by hand.
       const steps = [
-        ['claude', 'plugin', 'marketplace', 'update', 'recap-box'],
-        ['claude', 'plugin', 'update', 'recap-box@recap-box'],
+        ['claude', 'plugin', 'marketplace', 'update', 'claude-mods'],
+        ['claude', 'plugin', 'update', 'recap-box@claude-mods'],
       ]
       for (const argv of steps) {
         const r = await $.process
