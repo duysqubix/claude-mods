@@ -1,8 +1,21 @@
 import { expect, mock, test } from 'claude-code/testing'
 import type { Engine } from 'claude-code/testing'
-import type { On } from 'claude-code'
+import type { AgentInfo, On } from 'claude-code'
 
 // A publish prints the short form; a pasted link may be the code/ form, a different id.
+// A helper agent as the engine lists it; a test names only the fields it looks at.
+const agent = (a: Pick<AgentInfo, 'id' | 'description' | 'type' | 'status'>): AgentInfo => ({
+  kind: 'local_agent',
+  taskStatus: 'running',
+  label: a.description,
+  startTime: 0,
+  cwd: '/',
+  tokenCount: 0,
+  tokenSamples: [],
+  hasRow: true,
+  ...a,
+})
+
 const A = 'https://claude.ai/artifact/RoadmapA1'
 const B = 'https://claude.ai/artifact/RoadmapB2'
 const C = 'https://claude.ai/artifact/RoadmapC3'
@@ -77,7 +90,7 @@ const engine = (on: On, roadmaps?: unknown, { key = KEY, root = APP_DIR, data = 
   let tries = 0
   on('session.id', () => ({ value: 'me1' }))
   on('agent.list', () => ({
-    value: [{ id: 'a1', description: 'review the diff', type: 'oh-my-claudecode:code-reviewer', status: 'running' }],
+    value: [agent({ id: 'a1', description: 'review the diff', type: 'oh-my-claudecode:code-reviewer', status: 'running' })],
   }))
   on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('turn.complete', (_, e) => ({ text: e.answer }))

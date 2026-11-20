@@ -13,6 +13,19 @@ import type {
   TurnCompleteInput,
 } from 'claude-code'
 
+// A helper agent as the engine lists it; a test names only the fields it looks at.
+const agent = (a: Pick<AgentInfo, 'id' | 'description' | 'type' | 'status'>): AgentInfo => ({
+  kind: 'local_agent',
+  taskStatus: 'running',
+  label: a.description,
+  startTime: 0,
+  cwd: '/',
+  tokenCount: 0,
+  tokenSamples: [],
+  hasRow: true,
+  ...a,
+})
+
 const PANE = {
   plugin: 'recap-box',
   component: 'Pane',
@@ -1241,7 +1254,7 @@ test('a helper agent at work shows while the session waits on it or only looks',
     await clock.advance(2_000)
   }
   // Named by its kind: its task's words name no stage.
-  const reviewer: AgentInfo = { id: 'a1', description: 'Second look at the diff', type: 'oh-my-claudecode:code-reviewer', status: 'running' }
+  const reviewer = agent({ id: 'a1', description: 'Second look at the diff', type: 'oh-my-claudecode:code-reviewer', status: 'running' })
 
   // A plugin's agent, one inside another agent, one not yet at work, and a teammate in a pane
   // of its own, whose status outlives the pane, are not the session's helpers.
@@ -1281,7 +1294,7 @@ test('a helper agent at work shows while the session waits on it or only looks',
   await helper('complete', 'a1')
   expect(await shown()).toBe('RESEARCHING')
   // A helper of no named kind goes by its task.
-  agents.push({ id: 'a4', description: 'Plan the release', type: 'general-purpose', status: 'running' })
+  agents.push(agent({ id: 'a4', description: 'Plan the release', type: 'general-purpose', status: 'running' }))
   await helper('start', 'a4')
   expect(await shown()).toBe('PLANNING')
   expect(asked).toBe(1)
