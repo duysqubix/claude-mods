@@ -1,4 +1,8 @@
 {
   "name": "roadmap-keeper",
+  "version": "1.0.0",
+  "author": {
+    "name": "duysqubix"
+  },
   "description": "Reminds the agent to update a project's roadmaps after commits, PRs and closed beads in its folder"
 }

@@ -1,5 +1,0 @@
-{
-  "name": "roadmap-keeper",
-  "owner": { "name": "duysqubix" },
-  "plugins": [{ "name": "roadmap-keeper", "source": "./" }]
-}

@@ -21,61 +21,16 @@ The mod finds a command's folder from where the Bash tool's last `cd` left the s
 
 The skill builds `roadmap.html` each time, and within one conversation a publish of the same file replaces the page it made before. To start a second effort's roadmap in the same conversation, ask for another file name, such as `kitchen-roadmap.html`.
 
-## Install
+## Install and updates
 
-At the prompt of a terminal session:
-
-```
-/plugin install roadmap-keeper --marketplace duysqubix/roadmap-keeper
-```
-
-Answer `y` to add the marketplace, then press Enter for the user scope.
-
-From a shell:
+roadmap-keeper ships in the [claude-mods](../../README.md) library: install it and keep it updated as that page says.
 
 ```
-claude plugin install roadmap-keeper --marketplace duysqubix/roadmap-keeper
+/plugin install roadmap-keeper --marketplace duysqubix/claude-mods
 ```
-
-In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace with `duysqubix/roadmap-keeper`, then Add plugin.
 
 The nudge points the agent at the `project-roadmap` skill, which makes and updates the page. The skill ships in [duysqubix/skills](https://github.com/duysqubix/skills).
 
-## Updates
-
-Every commit on `main` is a release. `plugin.json` has no `version`, so Claude Code versions the plugin by commit.
-
-Claude Code leaves auto-update off for marketplaces it does not ship. To turn it on, set `autoUpdate` on the marketplace's entry in `~/.claude/settings.json`. Claude Code ignores this flag in project and local settings.
-
-```json
-"extraKnownMarketplaces": {
-  "roadmap-keeper": {
-    "source": { "source": "github", "repo": "duysqubix/roadmap-keeper" },
-    "autoUpdate": true
-  }
-}
-```
-
-Each session then checks for new commits at a random moment in its first 10 minutes. To update right away, run this from a shell, then `/reload-plugins` in each session that is already open:
-
-```
-claude plugin marketplace update roadmap-keeper && claude plugin update roadmap-keeper@roadmap-keeper
-```
-
 ## Develop
 
-From your clone:
-
-```
-claude --plugin-dir .   # this folder overrides the installed copy and reloads after each edit
-```
-
-A push to `main` is a release, so run the checks before you push:
-
-```
-claude plugin validate . && claude plugin test . && tsc -p .
-```
-
-`tsc` needs the types the engine writes into `.claude-plugin/types/` the first time a `--plugin-dir` session loads the folder.
-
-The test kit doesn't run a mod's `tool.check` hook on that mod's own calls, so the mod's own OK is checked live: run an ask-first session (`--permission-mode default`) on a throwaway linked page, and no prompt should appear for the rows. A mod call made after its hook returned skips every hook of the mod, that OK included, so each hook awaits its row writes.
+See [Develop](../../README.md#develop) in the library's README. From the library's folder, `claude --plugin-dir plugins/roadmap-keeper` runs this mod from your clone.

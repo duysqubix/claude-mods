@@ -1,0 +1,21 @@
+{
+  "name": "claude-mods",
+  "owner": {
+    "name": "duysqubix"
+  },
+  "metadata": {
+    "description": "Claude Code mods by duysqubix: recap-box and roadmap-keeper, installed from one place"
+  },
+  "plugins": [
+    {
+      "name": "recap-box",
+      "source": "./plugins/recap-box",
+      "description": "A small box beside the transcript: a short title for the chat, the stage of the work, what is happening now and the session's goal, in plain words"
+    },
+    {
+      "name": "roadmap-keeper",
+      "source": "./plugins/roadmap-keeper",
+      "description": "Reminds the agent to update a project's roadmap pages after commits, pull requests and closed beads"
+    }
+  ]
+}

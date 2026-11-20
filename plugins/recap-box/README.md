@@ -18,71 +18,26 @@ A Claude Code mod: a small box beside the transcript that says, in plain words, 
 
 Later sessions keep the setting; sessions already open keep theirs until they restart.
 
-`/recap-box upgrade` installs the newest version and reloads the plugins. While one waits, the box says so at its top, under the title: see [Updates](#updates).
+`/recap-box upgrade` installs the newest version and reloads the plugins. While one waits, the box says so at its top, under the title: see [Install and updates](#install-and-updates).
 
-## Install
+## Install and updates
 
-At the prompt of a terminal session:
-
-```
-/plugin install recap-box --marketplace duysqubix/recap-box
-```
-
-Answer `y` to add the marketplace, then press Enter for the user scope.
-
-From a shell:
+recap-box ships in the [claude-mods](../../README.md) library: install it and keep it updated as that page says.
 
 ```
-claude plugin install recap-box --marketplace duysqubix/recap-box
+/plugin install recap-box --marketplace duysqubix/claude-mods
 ```
 
-In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace with `duysqubix/recap-box`, then Add plugin.
-
-## Updates
-
-Every commit on `main` is a release. `plugin.json` has no `version`, so Claude Code versions the plugin by commit.
-
-Claude Code leaves auto-update off for marketplaces it does not ship. To turn it on, set `autoUpdate` on the marketplace's entry in `~/.claude/settings.json`. Claude Code ignores this flag in project and local settings.
-
-```json
-"extraKnownMarketplaces": {
-  "recap-box": {
-    "source": { "source": "github", "repo": "duysqubix/recap-box" },
-    "autoUpdate": true
-  }
-}
-```
-
-That entry, with `"recap-box@recap-box": true` under `enabledPlugins`, has two effects:
-
-- Each session checks for new commits at a random moment in its first 10 minutes. A session that takes one shows `Plugin updated: recap-box`, then reloads it or says to run `/reload-plugins`.
-- The install heals itself. If the marketplace or the plugin record goes missing from `~/.claude/plugins`, it comes back within two session starts. Missing plugin files come back at the next check.
-
-Claude Code skips the check when its own auto-updater is off, as under `DISABLE_AUTOUPDATER` or `DISABLE_UPDATES`. Set `FORCE_AUTOUPDATE_PLUGINS=1` to keep the check on for plugins.
-
-The box checks on its own, whatever those variables say. While `main` holds a commit the copy running lacks, it shows `Update available: /recap-box upgrade` at its top, under the title. It asks GitHub when a session starts at the prompt or a surface attaches, then every hour. A copy run from a clone (`--plugin-dir`) never shows it.
+The box also checks on its own, whatever Claude Code's update settings say. While the library's `main` holds a newer version of recap-box than the copy running, it shows `Update available: /recap-box upgrade` at its top, under the title. It reads `main` when a session starts at the prompt or a surface attaches, then every hour. A clone at `main`'s version, or ahead of it, never shows it.
 
 To update right away, run `/recap-box upgrade`. It runs these two commands with the `claude` on your `PATH`, then reloads the plugins of that session:
 
 ```
-claude plugin marketplace update recap-box && claude plugin update recap-box@recap-box
+claude plugin marketplace update claude-mods && claude plugin update recap-box@claude-mods
 ```
 
 Where `claude` is not on the `PATH`, as in the desktop app, run them from a shell. Then run `/recap-box upgrade` or `/reload-plugins` in any other session that is already open.
 
 ## Develop
 
-From your clone:
-
-```
-git config core.hooksPath .githooks   # once: turns on the pre-push checks
-claude --plugin-dir .                 # this folder overrides the installed copy and reloads after each edit
-```
-
-A push to `main` is a release, so the pre-push hook blocks a push that fails these checks:
-
-```
-claude plugin validate . && claude plugin test . && tsc -p .
-```
-
-`tsc` needs the types the engine writes into `.claude-plugin/types/` the first time a `--plugin-dir` session loads the folder. Until then the hook skips it.
+See [Develop](../../README.md#develop) in the library's README. From the library's folder, `claude --plugin-dir plugins/recap-box` runs this mod from your clone.

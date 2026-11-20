@@ -1,5 +1,0 @@
-{
-  "name": "recap-box",
-  "owner": { "name": "duysqubix" },
-  "plugins": [{ "name": "recap-box", "source": "./" }]
-}
