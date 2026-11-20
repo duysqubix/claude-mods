@@ -66,3 +66,51 @@ To add a mod, make its folder under `plugins/` with `"version": "0.1.0"` in its 
 ## License
 
 MIT
+
+## Moving from the old repos (for people and agents)
+
+recap-box and roadmap-keeper used to install from repos of their own, `duysqubix/recap-box` and `duysqubix/roadmap-keeper`. Those repos get no more updates; both mods now install from this library.
+
+A machine needs moving when `claude plugin list` shows `recap-box@recap-box` or `roadmap-keeper@roadmap-keeper`. To move it, run this block from a shell. Running it twice does no harm: the second run reports that the old copies and install lists are already gone, and that the new ones are already there.
+
+```sh
+# 1. Remove the old copies and their install lists; this also drops their entries from settings.json.
+claude plugin uninstall recap-box@recap-box
+claude plugin uninstall roadmap-keeper@roadmap-keeper
+claude plugin marketplace remove recap-box
+claude plugin marketplace remove roadmap-keeper
+
+# 2. Add the library and install both mods from it; this adds their entries to settings.json.
+claude plugin marketplace add duysqubix/claude-mods
+claude plugin install recap-box@claude-mods
+claude plugin install roadmap-keeper@claude-mods
+
+# 3. Keep what each mod saved: roadmap-keeper's list of roadmap pages, recap-box's history switch.
+#    A mod's file is <mod>_<library>-<first 12 characters of sha256("<mod>@<library>")>.json.
+#    Run this before any session uses the new copies; it never overwrites a file.
+cd "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/store"
+for mod in recap-box roadmap-keeper; do
+  old="${mod}_${mod}-$(printf '%s' "$mod@$mod" | shasum -a 256 | cut -c1-12).json"
+  new="${mod}_claude-mods-$(printf '%s' "$mod@claude-mods" | shasum -a 256 | cut -c1-12).json"
+  if [ -f "$old" ] && [ ! -f "$new" ]; then cp "$old" "$new"; fi
+done
+
+# 4. Turn on automatic updates for the library; step 2 adds its entry without them.
+f="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
+if command -v jq >/dev/null; then
+  jq '.extraKnownMarketplaces["claude-mods"].autoUpdate = true' "$f" > "$f.tmp" && mv "$f.tmp" "$f"
+else
+  echo "Add \"autoUpdate\": true to the claude-mods entry under extraKnownMarketplaces in $f"
+fi
+```
+
+Then run `/reload-plugins` in each open session, or restart it.
+
+To check the move: `claude plugin list` shows `recap-box@claude-mods` and `roadmap-keeper@claude-mods`, and neither old name. In `settings.json`, `extraKnownMarketplaces` holds `claude-mods` with `"autoUpdate": true`, and no `recap-box` or `roadmap-keeper`.
+
+Notes for agents doing this for someone:
+
+- Run the block as it is, on each machine the person uses; it touches only that machine's Claude Code setup.
+- Don't hand-edit `installed_plugins.json` or `known_marketplaces.json`; the commands keep them and `settings.json` in step.
+- A settings file kept in a dotfiles repo or synced between machines needs the same change there, or the next sync brings the old entries back.
+- A clone run with `--plugin-dir` or `CLAUDE_CODE_PLUGIN_DIRS` now lives at `plugins/<mod>` in a clone of this repo.
